@@ -1,0 +1,334 @@
+---
+import Layout from "../layouts/Layout.astro";
+import Header from "../components/Header.tsx";
+---
+
+<Layout>
+	<Header client:only="react" />
+	<style>
+		body {
+			font-family: Arial, sans-serif;
+			/* margin: 20px; */
+		}
+		section {
+			margin: 40px;
+		}
+		table {
+			border-collapse: collapse;
+			width: 100%;
+			margin: 10px 0;
+		}
+		th,
+		td {
+			border: 1px solid #ccc;
+			padding: 6px;
+		}
+		.grid {
+			max-height: 220px;
+			overflow: auto;
+			border: 1px solid #ccc;
+			padding: 6px;
+		}
+		.row-actions button {
+			margin-left: 4px;
+		}
+		.panel {
+			border: 1px solid #aaa;
+			padding: 10px;
+			margin-top: 12px;
+		}
+		.flex {
+			display: flex;
+			gap: 10px;
+			align-items: center;
+		}
+	</style>
+	<section>
+		<h1>Sales System</h1>
+		<h3>Customers</h3>
+		<div id="customersGrid" class="grid"></div>
+		<h3>Products</h3>
+		<div id="productsGrid" class="grid"></div>
+		<h3>Create Sale</h3>
+		<div class="panel">
+			<div class="flex">
+				<label
+					>Customer:
+					<select id="customerSelect"></select>
+				</label>
+				<label
+					>Payment Method:
+					<select id="paymentSelect">
+						<option value="Credit Card">Credit Card</option>
+						<option value="Cash">Cash</option>
+						<option value="Store Credit">Store Credit</option>
+					</select>
+				</label>
+			</div>
+			<table id="itemsTable">
+				<thead>
+					<tr><th>Product</th><th>Quantity</th><th></th></tr>
+				</thead>
+				<tbody></tbody>
+			</table>
+			<button id="addRowBtn">Add Row</button>
+			<button id="submitBtn" disabled>Submit Sale</button>
+		</div>
+		<h3>Breakdown</h3>
+		<pre id="breakdown"></pre>
+	</section>
+	<script>
+		const API_BASE = "http://localhost:8000";
+		let products: any[] = [];
+		let customers: any[] = [];
+
+		async function loadData() {
+			try {
+				const [custRes, prodRes] = await Promise.all([
+					fetch(`${API_BASE}/customers`),
+					fetch(`${API_BASE}/products`),
+				]);
+				if (!custRes.ok || !prodRes.ok) {
+					throw new Error("Error al cargar datos");
+				}
+
+				customers = await custRes.json();
+				products = await prodRes.json();
+
+				// Debug: ver qué estructura tienen los datos
+				console.log("Customers:", customers);
+				console.log("Products:", products);
+				renderGrids();
+				populateSelects();
+				addRow(); // start with one line
+			} catch (error) {
+				console.error("Error loading data:", error);
+				const customersGrid = document.getElementById("customersGrid");
+				const productsGrid = document.getElementById("productsGrid");
+				if (customersGrid)
+					customersGrid.innerHTML = "<p>Error al cargar clientes</p>";
+				if (productsGrid)
+					productsGrid.innerHTML = "<p>Error al cargar productos</p>";
+			}
+		}
+
+		function renderGrids() {
+			const customersGrid = document.getElementById("customersGrid");
+			if (customersGrid && customers.length > 0) {
+				customersGrid.innerHTML =
+					"<table><tr><th>ID</th><th>Name</th><th>Type</th><th>Credit Terms</th></tr>" +
+					customers
+						.map(
+							(c) =>
+								`<tr><td>${c.customer_id || c.id || "N/A"}</td><td>${c.name || "N/A"}</td><td>${c.customer_type || c.type || "N/A"}</td><td>${c.credit_terms_days || c.credit_terms || "N/A"}</td></tr>`,
+						)
+						.join("");
+			}
+
+			const productsGrid = document.getElementById("productsGrid");
+			if (productsGrid && products.length > 0) {
+				productsGrid.innerHTML =
+					"<table><tr><th>ID</th><th>Name</th><th>Type</th><th>List Price</th></tr>" +
+					products
+						.map((p) => {
+							const price =
+								p.list_price || p.price || p.listPrice || 0;
+							const formattedPrice =
+								typeof price === "number"
+									? price.toFixed(2)
+									: "N/A";
+							return `<tr><td>${p.product_id || p.id || "N/A"}</td><td>${p.name || "N/A"}</td><td>${p.product_type || p.type || "N/A"}</td><td>${formattedPrice}</td></tr>`;
+						})
+						.join("");
+			}
+		}
+
+		function populateSelects() {
+			const cs = document.getElementById("customerSelect");
+			if (cs && customers.length > 0) {
+				cs.innerHTML = customers
+					.map((c) => {
+						const id = c.customer_id || c.id || "N/A";
+						const name = c.name || "N/A";
+						const type = c.customer_type || c.type || "N/A";
+						const terms =
+							c.credit_terms_days || c.credit_terms || "N/A";
+						return `<option value="${id}">${name} (${type}, ${terms}d)</option>`;
+					})
+					.join("");
+			}
+		}
+
+		function addRow() {
+			const tbody = document.querySelector("#itemsTable tbody");
+			if (!tbody) return;
+
+			const tr = document.createElement("tr");
+			const tdProduct = document.createElement("td");
+			const select = document.createElement("select");
+
+			if (products.length > 0) {
+				products.forEach((p) => {
+					const opt = document.createElement("option");
+					const id = p.product_id || p.id || "N/A";
+					const name = p.name || "N/A";
+					const type = p.product_type || p.type || "N/A";
+					const price = p.list_price || p.price || p.listPrice || 0;
+					const formattedPrice =
+						typeof price === "number" ? price.toFixed(2) : "N/A";
+
+					opt.value = id;
+					opt.textContent = `${name} (${type}) - $${formattedPrice}`;
+					select.appendChild(opt);
+				});
+			}
+
+			tdProduct.appendChild(select);
+			const tdQty = document.createElement("td");
+			const qty = document.createElement("input");
+			qty.type = "number";
+			qty.min = "1";
+			qty.value = "1";
+			qty.addEventListener("input", validateForm);
+			tdQty.appendChild(qty);
+
+			const tdActions = document.createElement("td");
+			tdActions.className = "row-actions";
+			const btnDel = document.createElement("button");
+			btnDel.textContent = "Remove";
+			btnDel.onclick = () => {
+				tr.remove();
+				validateForm();
+			};
+			tdActions.appendChild(btnDel);
+
+			tr.appendChild(tdProduct);
+			tr.appendChild(tdQty);
+			tr.appendChild(tdActions);
+			tbody.appendChild(tr);
+			validateForm();
+		}
+
+		function getItemsFromTable() {
+			const rows = Array.from(
+				document.querySelectorAll("#itemsTable tbody tr"),
+			);
+			return rows
+				.map((r) => {
+					const select = r.querySelector(
+						"select",
+					) as HTMLSelectElement;
+					const input = r.querySelector("input") as HTMLInputElement;
+					if (!select || !input) return null;
+
+					const productId = parseInt(select.value, 10);
+					const qtyVal = parseFloat(input.value);
+					return {
+						product_id: productId,
+						quantity: isNaN(qtyVal) ? 0 : qtyVal,
+					};
+				})
+				.filter((i) => i !== null && i.product_id && i.quantity > 0);
+		}
+
+		function validateForm() {
+			const items = getItemsFromTable();
+			const submit = document.getElementById(
+				"submitBtn",
+			) as HTMLButtonElement;
+			if (submit) {
+				const shouldDisable = Boolean(
+					items.length === 0 ||
+						items.some((i) => i && i.quantity <= 0),
+				);
+				submit.disabled = shouldDisable;
+			}
+		}
+
+		async function submitSale() {
+			try {
+				const customerSelect = document.getElementById(
+					"customerSelect",
+				) as HTMLSelectElement;
+				const paymentSelect = document.getElementById(
+					"paymentSelect",
+				) as HTMLSelectElement;
+
+				if (!customerSelect || !paymentSelect) {
+					throw new Error("Elementos del formulario no encontrados");
+				}
+
+				const customer_id = parseInt(customerSelect.value, 10);
+				const payment_method = paymentSelect.value;
+				const items = getItemsFromTable();
+
+				if (items.length === 0) {
+					throw new Error("No hay productos seleccionados");
+				}
+
+				const resp = await fetch(`${API_BASE}/sales`, {
+					method: "POST",
+					headers: { "Content-Type": "application/json" },
+					body: JSON.stringify({
+						customer_id,
+						payment_method,
+						items,
+					}),
+				});
+
+				if (resp.status === 400) {
+					const err = await resp.json();
+					const breakdown = document.getElementById("breakdown");
+					if (breakdown) {
+						breakdown.textContent =
+							"Error: " + (err.error || "Invalid input");
+					}
+					return;
+				}
+
+				if (!resp.ok) {
+					throw new Error(`HTTP error! status: ${resp.status}`);
+				}
+
+				const data = await resp.json();
+				// Pretty print relevant fields
+				const out = {
+					subtotal: data.breakdown?.subtotal,
+					tax: data.breakdown?.tax,
+					total: data.breakdown?.total,
+					total_discounts_amount:
+						data.breakdown?.total_discounts_amount,
+					lines: data.breakdown?.lines,
+				};
+
+				const breakdown = document.getElementById("breakdown");
+				if (breakdown) {
+					breakdown.textContent = JSON.stringify(out, null, 2);
+				}
+			} catch (error) {
+				console.error("Error submitting sale:", error);
+				const breakdown = document.getElementById("breakdown");
+				if (breakdown) {
+					breakdown.textContent = `Error: ${(error as Error).message}`;
+				}
+			}
+		}
+
+		// Event listeners
+		document.addEventListener("DOMContentLoaded", function () {
+			const addRowBtn = document.getElementById("addRowBtn");
+			const submitBtn = document.getElementById("submitBtn");
+
+			if (addRowBtn) {
+				addRowBtn.addEventListener("click", addRow);
+			}
+
+			if (submitBtn) {
+				submitBtn.addEventListener("click", submitSale);
+			}
+
+			// Load data after DOM is ready
+			loadData();
+		});
+	</script>
+</Layout>

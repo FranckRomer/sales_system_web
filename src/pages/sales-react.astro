@@ -1,0 +1,32 @@
+---
+import Layout from "../layouts/Layout.astro";
+import SalesPage from "../components/SalesPage.tsx";
+import Header from "../components/Header.tsx";
+---
+
+<Layout>
+    <Header />
+    <h1>Sales System React</h1>
+    <SalesPage client:only="react" />
+</Layout>
+
+<style>
+    @keyframes pulse {
+        0% {
+            opacity: 1;
+        }
+        50% {
+            opacity: 0.5;
+        }
+        100% {
+            opacity: 1;
+        }
+    }
+
+    /* Mejorar la apariencia general */
+    h1 {
+        color: #333;
+        text-align: center;
+        margin-bottom: 30px;
+    }
+</style>
